@@ -3,7 +3,7 @@ import tempfile
 from typing import Optional
 
 from playwright.async_api import async_playwright
-
+import base64
 from logger import log, log_mem
 
 
@@ -11,7 +11,32 @@ DOWNLOAD_TIMEOUT_SEC = 180
 PAGE_GOTO_TIMEOUT_MS = 60000
 AFTER_GOTO_WAIT_MS = 3000
 AFTER_COOKIE_WAIT_MS = 5000
+SMULE_SECRET_KEY = "TT18WlV5TXVeLXFXYn1WTF5qSmR9TXYpOHklYlFXWGY+SUZCRGNKPiU0emcyQ2l8dGVsamBkVlpA"
 
+def decode_smule_url(url_encoded: str | None) -> str | None:
+    if not url_encoded or not url_encoded.startswith("e:"):
+        return url_encoded
+
+    def register_char_pool(value: str) -> str:
+        return base64.b64decode(value + "=" * (-len(value) % 4)).decode("latin1")
+
+    secret_pool = register_char_pool(SMULE_SECRET_KEY)
+    public_pool = register_char_pool(url_encoded[2:])
+    state = list(range(256))
+    h = 0
+
+    for b in range(256):
+        h = (h + state[b] + ord(secret_pool[b % len(secret_pool)])) % 256
+        state[b], state[h] = state[h], state[b]
+
+    out, b, h = [], 0, 0
+    for ch in public_pool:
+        b = (b + 1) % 256
+        h = (h + state[b]) % 256
+        state[b], state[h] = state[h], state[b]
+        out.append(chr(ord(ch) ^ state[(state[b] + state[h]) % 256]))
+
+    return "".join(out)
 
 def build_proxy_config(proxy: str) -> dict:
     raw = proxy.strip()
@@ -143,21 +168,52 @@ async def extract_smule_with_proxy(url: str, proxy: str) -> dict:
         return {"ok": False, "reason": str(e)}
 
 
-def pick_media(perf: Optional[dict]) -> tuple[Optional[str], Optional[str]]:
-    perf = perf or {}
+def pick_media(extract: dict) -> tuple[Optional[str], Optional[str]]:
+    perf = extract.get("perf") or {}
+    media = extract.get("media") or []
 
-    video_url = perf.get("video_media_mp4_url") or perf.get("video_media_url")
-    audio_url = perf.get("media_url")
     perf_type = perf.get("perf_type")
 
-    if video_url:
-        return "video", video_url
+    direct_audio = decode_smule_url(perf.get("media_url"))
+    direct_video_mp4 = decode_smule_url(perf.get("video_media_mp4_url"))
+    direct_video = decode_smule_url(perf.get("video_media_url"))
 
-    if perf_type == "audio" and audio_url:
-        return "audio", audio_url
+    log(f"[DECODE] perf_type={perf_type}")
+    log(f"[DECODE] media_url={direct_audio}")
+    log(f"[DECODE] video_media_url={direct_video}")
+    log(f"[DECODE] video_media_mp4_url={direct_video_mp4}")
 
-    if audio_url:
-        return "audio", audio_url
+    media_m4a = None
+    media_mp4 = None
+
+    for url in media:
+        if not media_m4a and ".m4a" in url:
+            media_m4a = url
+        if not media_mp4 and ".mp4" in url:
+            media_mp4 = url
+
+    log(f"[MEDIA CANDIDATES] media_mp4={media_mp4}")
+    log(f"[MEDIA CANDIDATES] media_m4a={media_m4a}")
+
+    if perf_type in ("video", "visualizer"):
+        if direct_video_mp4:
+            return "video", direct_video_mp4
+        if direct_video and ".mp4" in direct_video:
+            return "video", direct_video
+        if media_mp4:
+            return "video", media_mp4
+        if direct_audio:
+            return "audio", direct_audio
+        if media_m4a:
+            return "audio", media_m4a
+        return None, None
+
+    if direct_audio:
+        return "audio", direct_audio
+    if media_m4a:
+        return "audio", media_m4a
+    if media_mp4:
+        return "video", media_mp4
 
     return None, None
 

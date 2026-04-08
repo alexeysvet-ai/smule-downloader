@@ -35,7 +35,7 @@ async def handle_download(request: web.Request) -> web.Response:
             )
 
         perf = extract.get("perf") or {}
-        mode, media_url = pick_media(perf)
+        mode, media_url = pick_media(extract)
 
         log(f"[PICK] mode={mode}")
         log(f"[PICK] media_url={media_url}")
