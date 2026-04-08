@@ -5,6 +5,8 @@ import asyncio
 from smule_extract_diag_variant import _extract_with_browser, extract_smule
 import psutil
 import os
+from smule_download import pick_smule_media
+
 
 # === НАСТРОЙКИ ===
 URL = "https://www.smule.com/c/3041711132_5199733485"   # вставь сюда
