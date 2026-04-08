@@ -30,7 +30,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
     log(f"[CDP TMPFILE] path={temp_path} suffix={suffix}")
     log_mem("cdp:after_tmpfile")
 
-    probe_page = Page
+    probe_page = page
     cdp = None
     out_file = None
 
@@ -211,6 +211,15 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
         await probe_page.evaluate(
             """
             async ({ mediaUrl, mode }) => {
+              document.querySelectorAll("video, audio").forEach((node) => {
+                try {
+                  node.pause();
+                  node.removeAttribute("src");
+                  node.load?.();
+                  node.remove();
+                } catch (e) {}
+              });
+
               const tagName = mode === "audio" ? "audio" : "video";
 
               let el = document.getElementById("oai_probe_player");
