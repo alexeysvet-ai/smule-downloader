@@ -309,27 +309,7 @@ async def download_in_browser(extract: dict, media_url: str, mode: str) -> str:
         log(f"[DOWNLOAD TRY] mode={mode} media_url={media_url}")
         log_mem("download:before_page_request_get")
 
-        resp = await page.request.get(
-            media_url,
-            timeout=DOWNLOAD_TIMEOUT_SEC * 1000,
-            fail_on_status_code=True,
-            headers={
-                "Referer": page.url,
-                "User-Agent": await page.evaluate("() => navigator.userAgent"),
-            },
-        )
-
-        log(f"[DOWNLOAD STATUS] status={resp.status} ok={resp.ok}")
-        log_mem("download:after_page_request_get")
-
-        log_mem("download:before_resp_body")
-        data = await resp.body()
-        log_mem("download:after_resp_body")
-
-        with open(temp_path, "wb") as f:
-            log_mem("download:before_f_write")
-            f.write(data)
-            log_mem("download:after_f_write")
+        return await download_via_aiohttp_stream(extract, media_url, mode)
 
         size = os.path.getsize(temp_path)
         log(f"[DOWNLOAD SAVED] path={temp_path} size={size}")
