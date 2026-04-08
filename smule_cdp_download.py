@@ -43,7 +43,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
             return
 
         target_request_id = request_id
-        log(f"[CDP TARGET] request_id={request_id} status={status}")
+        log(f"[CDP TARGET] request_id={request_id} status={status} url={response_url}")
         log_mem("cdp:start_stream")
 
         try:
@@ -57,15 +57,32 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
             if buffered_data:
                 chunk = base64.b64decode(buffered_data)
                 out_file.write(chunk)
-                log(f"[CDP BUFFERED] bytes={len(chunk)}")
+                log(f"[CDP BUFFERED] bytes={len(chunk)} total={out_file.tell()}")
                 log_mem("cdp:after_buffered_write")
+            else:
+                log("[CDP BUFFERED] empty")
 
             stream_started.set()
         except Exception as e:
-            log(f"[CDP STREAM ERROR] {e}")
+            log(f"[CDP STREAM ERROR] {type(e).__name__}: {e}")
             stream_error = e
             stream_started.set()
             stream_finished.set()
+
+    def _log_target_event(prefix: str, event: dict):
+        request_id = event.get("requestId")
+        if target_request_id is not None and request_id == target_request_id:
+            log(f"[{prefix}] request_id={request_id} event={event}")
+
+    def _on_request_will_be_sent(event):
+        try:
+            url = event.get("request", {}).get("url", "")
+            request_id = event.get("requestId")
+            if url.startswith(media_url[:60]):
+                log(f"[CDP REQUEST] request_id={request_id} url={url}")
+                log_mem("cdp:request_match")
+        except Exception as e:
+            log(f"[CDP REQUEST ERROR] {e}")
 
     def _on_response_received(event):
         try:
@@ -108,20 +125,33 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
 
             data_b64 = event.get("data")
             if not data_b64:
+                log("[CDP CHUNK] empty")
                 return
 
             chunk = base64.b64decode(data_b64)
             out_file.write(chunk)
             log(f"[CDP CHUNK] size={len(chunk)} total={out_file.tell()}")
+            log_mem("cdp:after_chunk")
         except Exception as e:
-            log(f"[CDP DATA ERROR] {e}")
+            log(f"[CDP DATA ERROR] {type(e).__name__}: {e}")
             stream_error = e
             stream_finished.set()
 
     def _on_loading_finished(event):
+        _log_target_event("CDP FINISH EVENT", event)
         if event.get("requestId") == target_request_id:
             log("[CDP FINISHED]")
             log_mem("cdp:finished")
+            stream_finished.set()
+
+    def _on_loading_failed(event):
+        nonlocal stream_error
+        _log_target_event("CDP FAIL EVENT", event)
+        if target_request_id is None or event.get("requestId") == target_request_id:
+            log(f"[CDP FAILED] event={event}")
+            stream_error = CDPDownloadError(
+                f"loadingFailed errorText={event.get('errorText')} canceled={event.get('canceled')}"
+            )
             stream_finished.set()
 
     try:
@@ -133,9 +163,11 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
         cdp = await context.new_cdp_session(probe_page)
         log_mem("cdp:after_cdp_session")
 
+        cdp.on("Network.requestWillBeSent", _on_request_will_be_sent)
         cdp.on("Network.responseReceived", _on_response_received)
         cdp.on("Network.dataReceived", _on_data_received)
         cdp.on("Network.loadingFinished", _on_loading_finished)
+        cdp.on("Network.loadingFailed", _on_loading_failed)
 
         log_mem("cdp:before_network_enable")
         await cdp.send("Network.enable")
@@ -153,11 +185,22 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
         await asyncio.wait_for(stream_started.wait(), timeout=20)
         log_mem("cdp:after_stream_started")
 
-        await asyncio.wait_for(stream_finished.wait(), timeout=180)
+        try:
+            await asyncio.wait_for(stream_finished.wait(), timeout=180)
+        except asyncio.TimeoutError:
+            size = os.path.getsize(temp_path) if os.path.exists(temp_path) else -1
+            log(f"[CDP TIMEOUT] file_size={size} target_request_id={target_request_id}")
+            log_mem("cdp:timeout_waiting_finish")
+            raise
+
         log_mem("cdp:after_stream_finished")
+
+        if stream_error:
+            raise stream_error
 
         if out_file:
             out_file.close()
+            out_file = None
             log_mem("cdp:file_closed")
 
         if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
@@ -171,10 +214,20 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
 
     finally:
         log_mem("cdp:cleanup_start")
+
+        for task in list(cdp_tasks):
+            task.cancel()
+
+        with contextlib.suppress(Exception):
+            if out_file and not out_file.closed:
+                out_file.close()
+
         with contextlib.suppress(Exception):
             if cdp:
                 await cdp.detach()
+
         with contextlib.suppress(Exception):
             if probe_page:
                 await probe_page.close()
+
         log_mem("cdp:cleanup_end")
