@@ -1,6 +1,6 @@
 import asyncio
 from playwright.async_api import async_playwright
-from proxy import get_active_proxies
+
 
 
 def build_proxy_config(proxy: str) -> dict:
@@ -127,13 +127,9 @@ async def _extract_with_browser(url: str, proxy_cfg: dict, keep_browser_open: bo
 
 
 async def extract_smule(url: str, keep_browser_open: bool = False) -> dict:
-    proxies = get_active_proxies()
 
-    if not proxies:
-        return {"ok": False, "reason": "no_proxies"}
-
-    for proxy in proxies:
-        try:
+    proxy = "http://gnktxrqy:munhcy6msboc@72.1.136.146:7037"
+    try:
             proxy_cfg = build_proxy_config(proxy)
 
             if keep_browser_open:
@@ -164,7 +160,7 @@ async def extract_smule(url: str, keep_browser_open: bool = False) -> dict:
                         "proxy": proxy,
                     }
 
-        except Exception as e:
+    except Exception as e:
             print(f"[SMULE PROXY FAIL] {proxy} err={e}")
 
     return {"ok": False, "reason": "no_working_proxy"}
