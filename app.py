@@ -2,7 +2,7 @@ import os
 from aiohttp import web
 
 from logger import log, log_mem
-from smule_service import extract_smule_with_proxy, pick_media, download_in_browser, close_extract, download_in_browser_via_cdp
+from smule_service import extract_smule_with_proxy, pick_media, download_in_browser, close_extract, download_in_browser_via_fetch_stream
 
 
 HOST = "0.0.0.0"
