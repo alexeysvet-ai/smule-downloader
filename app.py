@@ -3,7 +3,6 @@
 import asyncio
 
 from smule_extract_diag_variant import _extract_with_browser, extract_smule
-from smule_download import download_smule_file, pick_smule_media
 import psutil
 import os
 
