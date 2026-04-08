@@ -8,6 +8,8 @@ from playwright.async_api import async_playwright
 import base64
 from logger import log, log_mem
 from smule_cdp_download import download_in_browser_cdp
+from logger import log_mem_full
+
 
 
 DOWNLOAD_TIMEOUT_SEC = 180
