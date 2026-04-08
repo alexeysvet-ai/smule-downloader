@@ -247,8 +247,10 @@ async def download_via_aiohttp_stream(extract: dict, media_url: str, mode: str) 
 
         user_agent = await page.evaluate("() => navigator.userAgent")
 
+        user_agent = await page.evaluate("() => navigator.userAgent")
+
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+            "User-Agent": user_agent,
             "Accept": "*/*",
             "Accept-Encoding": "identity;q=1,*;q=0",
             "Referer": "https://www.smule.com/",
