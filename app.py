@@ -9,7 +9,7 @@ HOST = "0.0.0.0"
 PORT = int(os.getenv("PORT", "10000"))
 REQUEST_PATH = "/download"
 
-use_cdp = Trued
+use_cdp = True
 download_in_progress = False
 
 # Hardcoded for R&D:
