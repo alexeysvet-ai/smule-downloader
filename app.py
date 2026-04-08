@@ -64,7 +64,7 @@ async def handle_download(request: web.Request) -> web.Response:
         
         
         if use_cdp:
-            file_path = await download_in_browser_via_cdp(extract, media_url, mode)
+            file_path = await download_in_browser_via_fetch_stream(extract, media_url, mode)
         else:
             file_path = await download_in_browser(extract, media_url, mode)
 

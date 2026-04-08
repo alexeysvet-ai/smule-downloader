@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 from typing import Optional
@@ -225,9 +226,114 @@ def pick_media(extract: dict) -> tuple[Optional[str], Optional[str]]:
 
     return None, None
 
-
 async def download_in_browser_via_cdp(extract: dict, media_url: str, mode: str) -> str:
-    return await download_in_browser(extract, media_url, mode)
+    return await download_in_browser_cdp(extract, media_url, mode)
+
+async def download_in_browser_via_fetch_stream(extract: dict, media_url: str, mode: str) -> str:
+    page = extract.get("page")
+    if not page:
+        raise RuntimeError("Browser page not available")
+
+    suffix = ".m4a" if mode == "audio" else ".mp4"
+    fd, temp_path = tempfile.mkstemp(prefix="smule_fetch_stream_", suffix=suffix)
+    os.close(fd)
+
+    callback_name = f"oai_write_chunk_{abs(hash(temp_path))}"
+    stream_done = asyncio.Event()
+    stream_error: str | None = None
+    total_bytes = 0
+
+    def _write_chunk(chunk_b64: str):
+        nonlocal total_bytes
+        chunk = base64.b64decode(chunk_b64)
+        with open(temp_path, "ab") as f:
+            f.write(chunk)
+        total_bytes += len(chunk)
+
+    def _stream_done():
+        stream_done.set()
+
+    def _stream_fail(message: str):
+        nonlocal stream_error
+        stream_error = message
+        stream_done.set()
+
+    await page.expose_function(callback_name, _write_chunk)
+    await page.expose_function(f"{callback_name}_done", _stream_done)
+    await page.expose_function(f"{callback_name}_fail", _stream_fail)
+
+    try:
+        log(f"[FETCH STREAM] mode={mode} media_url={media_url}")
+        log_mem("fetch_stream:before_eval")
+
+        await page.evaluate(
+            """
+            async ({ mediaUrl, callbackName }) => {
+              try {
+                const resp = await fetch(mediaUrl, {
+                  method: "GET",
+                  credentials: "include",
+                  mode: "cors",
+                });
+
+                if (!resp.ok) {
+                  await window[callbackName + "_fail"](`HTTP ${resp.status}`);
+                  return;
+                }
+
+                if (!resp.body) {
+                  await window[callbackName + "_fail"]("Response body is empty");
+                  return;
+                }
+
+                const reader = resp.body.getReader();
+
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  if (!value || !value.length) continue;
+
+                  let binary = "";
+                  for (let i = 0; i < value.length; i++) {
+                    binary += String.fromCharCode(value[i]);
+                  }
+
+                  await window[callbackName](btoa(binary));
+                }
+
+                await window[callbackName + "_done"]();
+              } catch (e) {
+                await window[callbackName + "_fail"](String(e));
+              }
+            }
+            """,
+            {"mediaUrl": media_url, "callbackName": callback_name},
+        )
+
+        await asyncio.wait_for(stream_done.wait(), timeout=180)
+        log_mem("fetch_stream:after_eval")
+
+        if stream_error:
+            raise RuntimeError(stream_error)
+
+        size = os.path.getsize(temp_path)
+        log(f"[FETCH STREAM SAVED] path={temp_path} size={size} total_bytes={total_bytes}")
+        log_mem("fetch_stream:after_saved")
+
+        if size == 0:
+            raise RuntimeError("Downloaded file is empty")
+
+        return temp_path
+
+    except Exception:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
+
+async def download_via_aiohttp_stream(extract: dict, media_url: str, mode: str) -> str:
+    context = extract.get("context")
+    page = extract.get("page")
+    proxy = extract.get("proxy")
 
 async def download_via_aiohttp_stream(extract: dict, media_url: str, mode: str) -> str:
     context = extract.get("context")
