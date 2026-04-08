@@ -167,7 +167,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
             chunk = base64.b64decode(data_b64)
             if out_file and not out_file.closed:
                 out_file.write(chunk)
-            else
+            else:
                 log("[CDP SKIP WRITE] file already closed")
                 
             log(f"[CDP CHUNK] size={len(chunk)} total={out_file.tell()}")
