@@ -6,7 +6,7 @@ import os
 import re
 import tempfile
 import aiohttp
-from config import SMULE_SECRET_KEY as SECRET_KEY
+SECRET_KEY = "TT18WlV5TXVeLXFXYn1WTF5qSmR9TXYpOHklYlFXWGY+SUZCRGNKPiU0emcyQ2l8dGVsamBkVlpA"
 
 def decode_smule_url(url_encoded: str | None) -> str | None:
     if not url_encoded or not url_encoded.startswith("e:"):
