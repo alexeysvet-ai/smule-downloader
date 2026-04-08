@@ -165,7 +165,11 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
                 return
 
             chunk = base64.b64decode(data_b64)
-            out_file.write(chunk)
+            if out_file and not out_file.closed:
+                out_file.write(chunk)
+            else
+                log("[CDP SKIP WRITE] file already closed")
+                
             log(f"[CDP CHUNK] size={len(chunk)} total={out_file.tell()}")
             log_mem("cdp:after_chunk")
         except Exception as e:
@@ -232,7 +236,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
 
         log("[CDP WAIT] before stream_started.wait")
         log_mem("cdp:before_wait_stream_started")
-        await asyncio.wait_for(stream_started.wait(), timeout=20)
+        await asyncio.wait_for(stream_started.wait(), timeout=60)
         log("[CDP WAIT] after stream_started.wait")
         log_mem("cdp:after_stream_started")
 
