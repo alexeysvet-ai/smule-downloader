@@ -248,17 +248,14 @@ async def download_via_aiohttp_stream(extract: dict, media_url: str, mode: str) 
         user_agent = await page.evaluate("() => navigator.userAgent")
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Accept-Encoding": "identity;q=1,*;q=0",
             "Referer": "https://www.smule.com/",
-            "Sec-CH-UA": '"Not_A Brand";v="8", "Chromium";v="134", "Google Chrome";v="134"',
-            "Sec-CH-UA-Mobile": "?1",
-            "Sec-CH-UA-Platform": '"Android"',
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "Accept-Encoding": "gzip",
+            "Sec-Fetch-Dest": "video",
+            "Sec-Fetch-Mode": "no-cors",
+            "Sec-Fetch-Site": "cross-site",
+            "Range": "bytes=0-",
             "Cookie": cookie_header,
         }
 
