@@ -48,7 +48,25 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
         log_mem("cdp:start_stream_entry")
 
         if target_request_id is not None:
-            log(f"[CDP START_STREAM SKIP] target already selected={target_request_id} new_request_id={request_id}")
+            if status != 206:
+                log(f"[CDP START_STREAM SKIP] keep current target={target_request_id} new_request_id={request_id} status={status}")
+                return
+
+            log(f"[CDP TARGET SWITCH] old_request_id={target_request_id} new_request_id={request_id} status={status}")
+            target_request_id = request_id
+            target_request_ids.add(request_id)
+
+            if out_file and not out_file.closed:
+                out_file.close()
+                log("[CDP FILE] closed before reopen for 206")
+
+            out_file = open(temp_path, "wb")
+            log("[CDP FILE] reopened for 206 target")
+            log_mem("cdp:file_reopened_for_206")
+
+            stream_started.set()
+            log("[CDP STREAM STATE] stream_started.set()")
+            log_mem("cdp:after_stream_started_set")
             return
 
         target_request_ids.add(request_id)
