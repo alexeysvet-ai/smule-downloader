@@ -227,7 +227,7 @@ def pick_media(extract: dict) -> tuple[Optional[str], Optional[str]]:
 
 
 async def download_in_browser_via_cdp(extract: dict, media_url: str, mode: str) -> str:
-    return await download_in_browser_cdp(extract, media_url, mode)
+    return await download_in_browser(extract, media_url, mode)
 
 async def download_via_aiohttp_stream(extract: dict, media_url: str, mode: str) -> str:
     context = extract.get("context")
@@ -305,18 +305,38 @@ async def download_in_browser(extract: dict, media_url: str, mode: str) -> str:
         raise RuntimeError("Browser page not available")
 
     suffix = ".m4a" if mode == "audio" else ".mp4"
-    fd, temp_path = tempfile.mkstemp(prefix="smule_min_", suffix=suffix)
+    fd, temp_path = tempfile.mkstemp(prefix="smule_browser_", suffix=suffix)
     os.close(fd)
 
     try:
-        log(f"[DOWNLOAD TRY] mode={mode} media_url={media_url}")
-        log_mem("download:before_page_request_get")
+        log(f"[BROWSER DOWNLOAD TRY] mode={mode} media_url={media_url}")
+        log_mem("browser_download:before_expect")
 
-        return await download_via_aiohttp_stream(extract, media_url, mode)
+        async with page.expect_download(timeout=DOWNLOAD_TIMEOUT_SEC * 1000) as download_info:
+            await page.evaluate(
+                """
+                (url) => {
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "";
+                  a.rel = "noopener";
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                }
+                """,
+                media_url,
+            )
+
+        download = await download_info.value
+        log(f"[BROWSER DOWNLOAD] suggested={download.suggested_filename}")
+        log_mem("browser_download:after_expect")
+
+        await download.save_as(temp_path)
 
         size = os.path.getsize(temp_path)
-        log(f"[DOWNLOAD SAVED] path={temp_path} size={size}")
-        log_mem("download:after_saved")
+        log(f"[BROWSER DOWNLOAD SAVED] path={temp_path} size={size}")
+        log_mem("browser_download:after_saved")
 
         if size == 0:
             raise RuntimeError("Downloaded file is empty")
@@ -327,7 +347,6 @@ async def download_in_browser(extract: dict, media_url: str, mode: str) -> str:
         if os.path.exists(temp_path):
             os.remove(temp_path)
         raise
-
 
 async def close_extract(extract: dict):
     page = extract.get("page")
