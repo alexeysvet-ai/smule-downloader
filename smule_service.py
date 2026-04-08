@@ -2,6 +2,7 @@ import os
 import tempfile
 from typing import Optional
 
+import aiohttp
 from playwright.async_api import async_playwright
 import base64
 from logger import log, log_mem
@@ -227,6 +228,73 @@ def pick_media(extract: dict) -> tuple[Optional[str], Optional[str]]:
 
 async def download_in_browser_via_cdp(extract: dict, media_url: str, mode: str) -> str:
     return await download_in_browser_cdp(extract, media_url, mode)
+
+async def download_via_aiohttp_stream(extract: dict, media_url: str, mode: str) -> str:
+    context = extract.get("context")
+    page = extract.get("page")
+    proxy = extract.get("proxy")
+
+    if not context or not page:
+        raise RuntimeError("Browser context/page not available")
+
+    suffix = ".m4a" if mode == "audio" else ".mp4"
+    fd, temp_path = tempfile.mkstemp(prefix="smule_http_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        cookies = await context.cookies()
+        cookie_header = "; ".join(f'{c["name"]}={c["value"]}' for c in cookies)
+
+        user_agent = await page.evaluate("() => navigator.userAgent")
+
+        headers = {
+            "User-Agent": user_agent,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.smule.com/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "Cookie": cookie_header,
+        }
+
+        log(f"[HTTP STREAM] mode={mode} media_url={media_url}")
+        log(f"[HTTP STREAM] proxy={proxy}")
+        log_mem("http_stream:before_get")
+
+        timeout = aiohttp.ClientTimeout(total=180)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(
+                media_url,
+                headers=headers,
+                proxy=proxy,
+            ) as resp:
+                log(f"[HTTP STREAM] status={resp.status}")
+                log(f"[HTTP STREAM] content_type={resp.headers.get('Content-Type')}")
+                log(f"[HTTP STREAM] content_length={resp.headers.get('Content-Length')}")
+                log_mem("http_stream:after_get")
+
+                resp.raise_for_status()
+
+                with open(temp_path, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(64 * 1024):
+                        if not chunk:
+                            continue
+                        f.write(chunk)
+
+        size = os.path.getsize(temp_path)
+        log(f"[HTTP STREAM SAVED] path={temp_path} size={size}")
+        log_mem("http_stream:after_saved")
+
+        if size == 0:
+            raise RuntimeError("Downloaded file is empty")
+
+        return temp_path
+
+    except Exception:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
 
 async def download_in_browser(extract: dict, media_url: str, mode: str) -> str:
     page = extract.get("page")
