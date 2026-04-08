@@ -8,6 +8,9 @@ from smule_service import extract_smule_with_proxy, pick_media, download_in_brow
 HOST = "0.0.0.0"
 PORT = int(os.getenv("PORT", "10000"))
 REQUEST_PATH = "/download"
+  
+use_cdp = False
+
 
 # Hardcoded for R&D:
 SMULE_URL = "https://www.smule.com/c/2603336553_5199676986"
@@ -51,8 +54,13 @@ async def handle_download(request: web.Request) -> web.Response:
                 },
                 status=500,
             )
+        
+        
+        if use_cdp:
+            file_path = await download_in_browser_via_cdp(extract, media_url, mode)
+        else:
+            file_path = await download_in_browser(extract, media_url, mode)
 
-        file_path = await download_in_browser(extract, media_url, mode)
         log_mem("http:after_download")
 
         size = os.path.getsize(file_path)

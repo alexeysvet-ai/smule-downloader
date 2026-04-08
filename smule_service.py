@@ -5,6 +5,7 @@ from typing import Optional
 from playwright.async_api import async_playwright
 import base64
 from logger import log, log_mem
+from smule_cdp_download import download_in_browser_cdp
 
 
 DOWNLOAD_TIMEOUT_SEC = 180
@@ -217,6 +218,9 @@ def pick_media(extract: dict) -> tuple[Optional[str], Optional[str]]:
 
     return None, None
 
+
+async def download_in_browser_via_cdp(extract: dict, media_url: str, mode: str) -> str:
+    return await download_in_browser_cdp(extract, media_url, mode)
 
 async def download_in_browser(extract: dict, media_url: str, mode: str) -> str:
     page = extract.get("page")
