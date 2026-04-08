@@ -30,7 +30,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
     log(f"[CDP TMPFILE] path={temp_path} suffix={suffix}")
     log_mem("cdp:after_tmpfile")
 
-    probe_page = None
+    probe_page = Page
     cdp = None
     out_file = None
 
@@ -185,12 +185,6 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
             stream_finished.set()
 
     try:
-        log("[CDP SETUP] before new_page")
-        log_mem("cdp:before_new_page")
-        probe_page = await context.new_page()
-        log("[CDP SETUP] after new_page")
-        log_mem("cdp:after_new_page")
-
         log("[CDP SETUP] before new_cdp_session")
         log_mem("cdp:before_cdp_session")
         cdp = await context.new_cdp_session(probe_page)
@@ -211,16 +205,44 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
         log("[CDP SETUP] after Network.enable")
         log_mem("cdp:after_network_enable")
 
-        log(f"[CDP GOTO] media_url={media_url}")
-        log_mem("cdp:before_goto")
-        await probe_page.goto(
-            media_url,
-            referer=page.url,
-            wait_until="commit",
-            timeout=60000,
+        log(f"[CDP PLAY] media_url={media_url}")
+        log_mem("cdp:before_play")
+
+        await probe_page.evaluate(
+            """
+            async ({ mediaUrl, mode }) => {
+              const tagName = mode === "audio" ? "audio" : "video";
+
+              let el = document.getElementById("oai_probe_player");
+              if (el) el.remove();
+
+              el = document.createElement(tagName);
+              el.id = "oai_probe_player";
+              el.src = mediaUrl;
+              el.preload = "auto";
+              el.autoplay = true;
+              el.playsInline = true;
+              el.muted = true;
+              el.style.position = "fixed";
+              el.style.left = "-9999px";
+              el.style.top = "-9999px";
+              el.style.width = "1px";
+              el.style.height = "1px";
+
+              document.body.appendChild(el);
+
+              try {
+                await el.play();
+              } catch (e) {
+                console.log("[OAI_MEDIA_PLAY_ERROR]", String(e));
+              }
+            }
+            """,
+            {"mediaUrl": media_url, "mode": mode},
         )
-        log("[CDP GOTO] after goto")
-        log_mem("cdp:after_goto")
+
+        log("[CDP PLAY] player started in current page")
+        log_mem("cdp:after_play")
 
         log("[CDP WAIT] before stream_started.wait")
         log_mem("cdp:before_wait_stream_started")
@@ -285,9 +307,6 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
                 await cdp.detach()
                 log("[CDP CLEANUP] cdp detached")
 
-        with contextlib.suppress(Exception):
-            if probe_page:
-                await probe_page.close()
-                log("[CDP CLEANUP] probe page closed")
+
 
         log_mem("cdp:cleanup_end")
