@@ -35,22 +35,27 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
     out_file = None
 
     target_request_id = None
+    target_request_ids = set()
     stream_started = asyncio.Event()
     stream_finished = asyncio.Event()
     stream_error = None
     cdp_tasks = set()
 
     async def _start_stream(request_id: str, response_url: str, status: int):
-        nonlocal target_request_id, out_file, stream_error
+        nonlocal target_request_id, target_request_ids, out_file, stream_error
 
         log(f"[CDP START_STREAM ENTRY] request_id={request_id} status={status} url={response_url}")
         log_mem("cdp:start_stream_entry")
 
-        if target_request_id is not None:
-            log(f"[CDP START_STREAM SKIP] existing_target_request_id={target_request_id}")
+        if request_id in target_request_ids:
+            log(f"[CDP START_STREAM SKIP] duplicate_request_id={request_id}")
             return
 
-        target_request_id = request_id
+        target_request_ids.add(request_id)
+
+        if target_request_id is None:
+            target_request_id = request_id
+
         log(f"[CDP TARGET] request_id={request_id} status={status} url={response_url}")
         log_mem("cdp:start_stream_target_set")
 
@@ -140,7 +145,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
 
         try:
             request_id = event.get("requestId")
-            if request_id != target_request_id:
+            if request_id not in target_request_ids:
                 return
 
             data_b64 = event.get("data")
