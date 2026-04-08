@@ -34,6 +34,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
     stream_started = asyncio.Event()
     stream_finished = asyncio.Event()
     stream_error = None
+    cdp_tasks = set()
 
     async def _start_stream(request_id: str, response_url: str, status: int):
         nonlocal target_request_id, out_file, stream_error
@@ -75,7 +76,26 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
             if url.startswith(media_url[:60]):
                 log(f"[CDP MATCH] url={url}")
                 log_mem("cdp:response_match")
-                asyncio.create_task(_start_stream(request_id, url, response.get("status")))
+                log(f"[CDP TASK CREATE] request_id={request_id}")
+
+                task = asyncio.create_task(
+                    _start_stream(request_id, url, response.get("status"))
+                )
+                cdp_tasks.add(task)
+
+                def _on_task_done(t):
+                    cdp_tasks.discard(t)
+                    try:
+                        exc = t.exception()
+                        if exc:
+                            log(f"[CDP TASK ERROR] {type(exc).__name__}: {exc}")
+                        else:
+                            log("[CDP TASK DONE] ok")
+                    except Exception as cb_e:
+                        log(f"[CDP TASK CALLBACK ERROR] {cb_e}")
+
+                task.add_done_callback(_on_task_done)
+                log_mem("cdp:task_created")
         except Exception as e:
             log(f"[CDP RESPONSE ERROR] {e}")
 
