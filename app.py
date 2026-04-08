@@ -18,8 +18,6 @@ PROXY = "http://gnktxrqy:munhcy6msboc@72.1.136.146:7037"
 
 
 async def handle_download(request: web.Request) -> web.Response:
-    global download_in_progress
-
     log("[HTTP] /download start")
     log_mem("http:start")
 
