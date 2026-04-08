@@ -156,6 +156,8 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
             data_length = event.get("dataLength")
 
             log(f"[CDP DATA EVENT] request_id={request_id} data_len={data_length} encoded_len={encoded_data_length}")
+            log(f"[CDP DATA EVENT RAW] keys={list(event.keys())} has_data={bool(data_b64)} data_type={type(data_b64).__name__ if data_b64 is not None else 'None'}")
+            log(f"[CDP DATA EVENT RAW] event={event}")
             log_mem("cdp:data_event")
 
             if not data_b64:
