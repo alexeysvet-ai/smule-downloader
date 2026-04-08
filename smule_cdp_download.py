@@ -42,56 +42,28 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
     cdp_tasks = set()
 
     async def _start_stream(request_id: str, response_url: str, status: int):
-        nonlocal target_request_id, target_request_ids, out_file, stream_error
+        nonlocal target_request_id, target_request_ids, out_file
 
         log(f"[CDP START_STREAM ENTRY] request_id={request_id} status={status} url={response_url}")
         log_mem("cdp:start_stream_entry")
 
-        if request_id in target_request_ids:
-            log(f"[CDP START_STREAM SKIP] duplicate_request_id={request_id}")
+        if target_request_id is not None:
+            log(f"[CDP START_STREAM SKIP] target already selected={target_request_id} new_request_id={request_id}")
             return
 
         target_request_ids.add(request_id)
-
-        if target_request_id is None:
-            target_request_id = request_id
+        target_request_id = request_id
 
         log(f"[CDP TARGET] request_id={request_id} status={status} url={response_url}")
         log_mem("cdp:start_stream_target_set")
 
-        try:
-            out_file = open(temp_path, "wb")
-            log("[CDP FILE] opened")
-            log_mem("cdp:file_opened")
+        out_file = open(temp_path, "wb")
+        log("[CDP FILE] opened")
+        log_mem("cdp:file_opened")
 
-            log("[CDP STREAM CALL] before Network.streamResourceContent")
-            log_mem("cdp:before_stream_resource_content")
-            result = await asyncio.wait_for(
-                cdp.send("Network.streamResourceContent", {"requestId": request_id}),
-                timeout=10,
-            )
-            log("[CDP STREAM CALL] after Network.streamResourceContent")
-            log_mem("cdp:after_stream_resource_content")
-
-            buffered_data = result.get("bufferedData")
-            if buffered_data:
-                log(f"[CDP BUFFERED] base64_len={len(buffered_data)}")
-                chunk = base64.b64decode(buffered_data)
-                out_file.write(chunk)
-                log(f"[CDP BUFFERED] bytes={len(chunk)} total={out_file.tell()}")
-                log_mem("cdp:after_buffered_write")
-            else:
-                log("[CDP BUFFERED] empty")
-
-            stream_started.set()
-            log("[CDP STREAM STATE] stream_started.set()")
-            log_mem("cdp:after_stream_started_set")
-        except Exception as e:
-            log(f"[CDP STREAM ERROR] {type(e).__name__}: {e}")
-            log_mem("cdp:stream_error")
-            stream_error = e
-            stream_started.set()
-            stream_finished.set()
+        stream_started.set()
+        log("[CDP STREAM STATE] stream_started.set()")
+        log_mem("cdp:after_stream_started_set")
 
     def _log_target_event(prefix: str, event: dict):
         request_id = event.get("requestId")
