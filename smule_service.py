@@ -99,8 +99,14 @@ async def extract_smule_with_proxy(url: str, proxy: str) -> dict:
         page.on("request", on_request)
 
         log(f"[GOTO] {url}")
-        await page.goto(url, wait_until="domcontentloaded", timeout=PAGE_GOTO_TIMEOUT_MS)
+        await page.goto(url, wait_until="load", timeout=PAGE_GOTO_TIMEOUT_MS)
         log_mem("extract:after_goto")
+
+        await page.wait_for_function(
+            "() => !!window?.DataStore?.Pages?.Recording?.performance",
+            timeout=PAGE_GOTO_TIMEOUT_MS,
+        )
+        log_mem("extract:after_wait_perf_ready")
 
         await page.wait_for_timeout(AFTER_GOTO_WAIT_MS)
         log_mem("extract:after_wait_1")
