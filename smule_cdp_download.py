@@ -94,7 +94,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
         try:
             url = event.get("request", {}).get("url", "")
             request_id = event.get("requestId")
-            if url.startswith(media_url[:60]):
+            if url.split("?")[0] == media_url.split("?")[0]:
                 log(f"[CDP REQUEST] request_id={request_id} url={url}")
                 log_mem("cdp:request_match")
         except Exception as e:
@@ -108,7 +108,7 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
             status = response.get("status")
             mime_type = response.get("mimeType")
 
-            if url.startswith(media_url[:60]):
+            if url.split("?")[0] == media_url.split("?")[0]:
                 log(f"[CDP MATCH] request_id={request_id} status={status} mime={mime_type} url={url}")
                 log_mem("cdp:response_match")
                 log(f"[CDP TASK CREATE] request_id={request_id}")
