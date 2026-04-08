@@ -8,9 +8,9 @@ from smule_service import extract_smule_with_proxy, pick_media, download_in_brow
 HOST = "0.0.0.0"
 PORT = int(os.getenv("PORT", "10000"))
 REQUEST_PATH = "/download"
-  
-use_cdp = True
 
+use_cdp = True
+download_in_progress = False
 
 # Hardcoded for R&D:
 SMULE_URL = "https://www.smule.com/c/2603336553_5199676986"
@@ -18,8 +18,16 @@ PROXY = "http://gnktxrqy:munhcy6msboc@72.1.136.146:7037"
 
 
 async def handle_download(request: web.Request) -> web.Response:
+    global download_in_progress
+
     log("[HTTP] /download start")
     log_mem("http:start")
+
+    if download_in_progress:
+        log("[HTTP BUSY] skip second request")
+        return web.json_response({"ok": False, "reason": "busy"}, status=429)
+
+    download_in_progress = True
 
     extract = None
     file_path = None
@@ -83,6 +91,9 @@ async def handle_download(request: web.Request) -> web.Response:
         )
 
     finally:
+        global download_in_progress
+        download_in_progress = False
+
         if extract:
             await close_extract(extract)
 
