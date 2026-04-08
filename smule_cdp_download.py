@@ -66,7 +66,10 @@ async def download_in_browser_cdp(extract: dict, media_url: str, mode: str) -> s
 
             log("[CDP STREAM CALL] before Network.streamResourceContent")
             log_mem("cdp:before_stream_resource_content")
-            result = await cdp.send("Network.streamResourceContent", {"requestId": request_id})
+            result = await asyncio.wait_for(
+                cdp.send("Network.streamResourceContent", {"requestId": request_id}),
+                timeout=10,
+            )
             log("[CDP STREAM CALL] after Network.streamResourceContent")
             log_mem("cdp:after_stream_resource_content")
 
