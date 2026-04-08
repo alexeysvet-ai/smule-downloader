@@ -89,7 +89,6 @@ async def handle_download(request: web.Request) -> web.Response:
         )
 
     finally:
-        global download_in_progress
         download_in_progress = False
 
         if extract:
