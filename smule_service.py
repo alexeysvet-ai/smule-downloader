@@ -245,7 +245,7 @@ async def download_in_browser(extract: dict, media_url: str, mode: str) -> str:
         log_mem("download:after_page_request_get")
 
         log_mem("download:before_resp_body")
-  #      data = await resp.body()
+        data = await resp.body()
         log_mem("download:after_resp_body")
 
         with open(temp_path, "wb") as f:
