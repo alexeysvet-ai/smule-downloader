@@ -2,16 +2,22 @@ import os
 from aiohttp import web
 
 from logger import log, log_mem
-from smule_service import extract_smule_with_proxy, pick_media, download_in_browser, close_extract, download_in_browser_via_fetch_stream
-
+from smule_service import (
+    extract_smule_with_proxy,
+    pick_media,
+    download_in_browser,
+    close_extract,
+    download_in_browser_via_fetch_stream,
+    download_via_aiohttp_stream,
+    download_via_curl_cffi_stream,
+)
 
 HOST = "0.0.0.0"
 PORT = int(os.getenv("PORT", "10000"))
 REQUEST_PATH = "/download"
 
-use_cdp = True
+DOWNLOAD_METHOD = "curl_cffi"#os.getenv("DOWNLOAD_METHOD", "fetch_stream")
 download_in_progress = False
-
 # Hardcoded for R&D:
 SMULE_URL = "https://www.smule.com/c/2603336553_5199676986"
 PROXY = "http://gnktxrqy:munhcy6msboc@72.1.136.146:7037"
@@ -63,11 +69,18 @@ async def handle_download(request: web.Request) -> web.Response:
             )
         
         
-        if use_cdp:
-            file_path = await download_in_browser_via_fetch_stream(extract, media_url, mode)
-        else:
-            file_path = await download_in_browser(extract, media_url, mode)
+        log(f"[DOWNLOAD METHOD] {DOWNLOAD_METHOD}")
 
+        if DOWNLOAD_METHOD == "fetch_stream":
+            file_path = await download_in_browser_via_fetch_stream(extract, media_url, mode)
+        elif DOWNLOAD_METHOD == "aiohttp":
+            file_path = await download_via_aiohttp_stream(extract, media_url, mode)
+        elif DOWNLOAD_METHOD == "curl_cffi":
+            file_path = await download_via_curl_cffi_stream(extract, media_url, mode)
+        elif DOWNLOAD_METHOD == "browser":
+            file_path = await download_in_browser(extract, media_url, mode)
+        else:
+            raise RuntimeError(f"Unknown DOWNLOAD_METHOD: {DOWNLOAD_METHOD}")
         log_mem("http:after_download")
 
         size = os.path.getsize(file_path)

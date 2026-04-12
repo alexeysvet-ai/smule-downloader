@@ -491,3 +491,69 @@ async def close_extract(extract: dict):
             log_mem("close:after_playwright_stop")
     except Exception as e:
         log(f"[CLOSE PLAYWRIGHT ERROR] {e}")
+
+from curl_cffi.requests import AsyncSession
+
+
+async def download_via_curl_cffi_stream(extract: dict, media_url: str, mode: str) -> str:
+    context = extract.get("context")
+    page = extract.get("page")
+    proxy = extract.get("proxy")
+
+    if not context or not page:
+        raise RuntimeError("Browser context/page not available")
+
+    suffix = ".m4a" if mode == "audio" else ".mp4"
+    fd, temp_path = tempfile.mkstemp(prefix="smule_curl_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        # cookies → dict
+        cookies_list = await context.cookies()
+        cookies = {c["name"]: c["value"] for c in cookies_list}
+
+        # user-agent из браузера
+        user_agent = await page.evaluate("() => navigator.userAgent")
+
+        headers = {
+            "User-Agent": user_agent,
+            "Referer": "https://www.smule.com/",
+        }
+
+        log(f"[CURL STREAM] mode={mode} media_url={media_url}")
+        log(f"[CURL STREAM] proxy={proxy}")
+        log_mem("curl_stream:before_get")
+
+        async with AsyncSession(impersonate="chrome120") as session:
+            resp = await session.get(
+                media_url,
+                headers=headers,
+                cookies=cookies,
+                proxies={"https": proxy} if proxy else None,
+                stream=True,
+            )
+
+            log(f"[CURL STREAM] status={resp.status_code}")
+            log_mem("curl_stream:after_get")
+
+            resp.raise_for_status()
+
+            with open(temp_path, "wb") as f:
+                async for chunk in resp.aiter_content(chunk_size=256 * 1024):
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+
+        size = os.path.getsize(temp_path)
+        log(f"[CURL STREAM SAVED] path={temp_path} size={size}")
+        log_mem("curl_stream:after_saved")
+
+        if size == 0:
+            raise RuntimeError("Downloaded file is empty")
+
+        return temp_path
+
+    except Exception:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise

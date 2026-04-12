@@ -2,3 +2,4 @@ aiohttp
 playwright
 git+https://github.com/alexeysvet-ai/bot-core-lib.git@v0.6.0
 psutil
+curl_cffi
